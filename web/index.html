@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="rover_command">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>rover_command</title>
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <!--
+    You can customize the "flutter_bootstrap.js" script.
+    This is useful to provide a custom configuration to the Flutter loader
+    or to give the user feedback during the initialization process.
+
+    For more details:
+    * https://docs.flutter.dev/platform-integration/web/initialization
+  -->
+  <script>
+    // Intercept Ctrl+wheel and trackpad pinch at the browser window boundary so Chrome
+    // does not perform native page zoom, allowing Flutter's high-precision zoom engine to handle it.
+    window.addEventListener('wheel', function(e) {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (window._flutterOnWheelZoom) {
+          window._flutterOnWheelZoom(e.clientX, e.clientY, e.deltaY);
+        }
+      }
+    }, { passive: false, capture: true });
+
+    // Intercept browser-level keyboard zoom shortcuts (Ctrl + '=', Ctrl + '-', Ctrl + '0')
+    // so Chrome does not perform competing page zoom, ensuring single-source-of-truth in Flutter.
+    window.addEventListener('keydown', function(e) {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === '=' || e.key === '+' || e.key === '-' || e.key === '_' || e.key === '0') {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          if (window._flutterOnKeyboardZoom) {
+            window._flutterOnKeyboardZoom(e.key);
+          }
+        }
+      }
+    }, { passive: false, capture: true });
+
+    // Automated Real-Browser Verification Suite
+    if (window.location.search.includes('verify_zoom=1')) {
+      window.__runZoomVerification = async function() {
+        console.log('[Verification] Starting real-browser verification suite...');
+        for (let i = 0; i < 50; i++) {
+          if (typeof window._flutterOnWheelZoom === 'function' && typeof window._flutterOnKeyboardZoom === 'function') break;
+          await new Promise(r => setTimeout(r, 200));
+        }
+
+        const report = {
+          userAgent: navigator.userAgent,
+          devicePixelRatio: window.devicePixelRatio,
+          tests: {},
+          metrics: {}
+        };
+
+        let wheelCalls = [];
+        let keyCalls = [];
+        const originalWheel = window._flutterOnWheelZoom;
+        const originalKey = window._flutterOnKeyboardZoom;
+        window._flutterOnWheelZoom = function(x, y, dy) {
+          wheelCalls.push({ x, y, dy, time: performance.now() });
+          if (originalWheel) originalWheel(x, y, dy);
+        };
+        window._flutterOnKeyboardZoom = function(k) {
+          keyCalls.push({ k, time: performance.now() });
+          if (originalKey) originalKey(k);
+        };
+
+        // 1. Mouse verification
+        wheelCalls = [];
+        const normalScrollEv = new WheelEvent('wheel', { clientX: 720, clientY: 450, deltaY: 100, ctrlKey: false, cancelable: true });
+        window.dispatchEvent(normalScrollEv);
+        report.tests.mouseNormalScroll = {
+          passed: wheelCalls.length === 0,
+          description: "Normal scroll (ctrlKey=false) does not trigger zoom controller",
+          calls: wheelCalls.length
+        };
+
+        wheelCalls = [];
+        const wheelUpEv = new WheelEvent('wheel', { clientX: 600, clientY: 400, deltaY: -120, ctrlKey: true, cancelable: true });
+        window.dispatchEvent(wheelUpEv);
+        report.tests.mouseZoomIn = {
+          passed: wheelCalls.length === 1 && wheelCalls[0].dy === -120 && wheelCalls[0].x === 600 && wheelCalls[0].y === 400 && wheelUpEv.defaultPrevented,
+          description: "Ctrl + wheel upward triggers zoom controller with exact cursor coordinates and prevents browser native zoom",
+          eventIntercepted: wheelUpEv.defaultPrevented,
+          capturedCall: wheelCalls[0]
+        };
+
+        wheelCalls = [];
+        const wheelDownEv = new WheelEvent('wheel', { clientX: 600, clientY: 400, deltaY: 150, ctrlKey: true, cancelable: true });
+        window.dispatchEvent(wheelDownEv);
+        report.tests.mouseZoomOut = {
+          passed: wheelCalls.length === 1 && wheelCalls[0].dy === 150 && wheelDownEv.defaultPrevented,
+          description: "Ctrl + wheel downward triggers zoom controller and prevents browser native zoom",
+          capturedCall: wheelCalls[0]
+        };
+
+        wheelCalls = [];
+        const tStart = performance.now();
+        for (let j = 0; j < 30; j++) {
+          window.dispatchEvent(new WheelEvent('wheel', { clientX: 720, clientY: 450, deltaY: (j % 2 === 0 ? -40 : 40), ctrlKey: true, cancelable: true }));
+        }
+        const tDuration = performance.now() - tStart;
+        report.tests.rapidZoom = {
+          passed: wheelCalls.length === 30 && tDuration < 200,
+          description: "Rapid wheel events dispatched and processed without stutter or freeze",
+          eventCount: wheelCalls.length,
+          durationMs: tDuration
+        };
+
+        // 2. Touchpad verification (Windows Precision Touchpad event flow)
+        wheelCalls = [];
+        const pinchOutEv = new WheelEvent('wheel', { clientX: 500, clientY: 350, deltaY: -65, ctrlKey: true, cancelable: true });
+        window.dispatchEvent(pinchOutEv);
+        report.tests.touchpadPinchOutward = {
+          passed: wheelCalls.length === 1 && wheelCalls[0].dy === -65 && pinchOutEv.defaultPrevented,
+          description: "WPT pinch outward (synthetic wheel event with ctrlKey=true, no physical VK_CONTROL) successfully captured and forwarded",
+          capturedCall: wheelCalls[0]
+        };
+
+        wheelCalls = [];
+        const pinchInEv = new WheelEvent('wheel', { clientX: 500, clientY: 350, deltaY: 80, ctrlKey: true, cancelable: true });
+        window.dispatchEvent(pinchInEv);
+        report.tests.touchpadPinchInward = {
+          passed: wheelCalls.length === 1 && wheelCalls[0].dy === 80 && pinchInEv.defaultPrevented,
+          description: "WPT pinch inward successfully captured and forwarded",
+          capturedCall: wheelCalls[0]
+        };
+
+        wheelCalls = [];
+        const wptScrollEv = new WheelEvent('wheel', { clientX: 500, clientY: 350, deltaY: 50, ctrlKey: false, cancelable: true });
+        window.dispatchEvent(wptScrollEv);
+        report.tests.touchpadNormalScroll = {
+          passed: wheelCalls.length === 0,
+          description: "Normal two-finger scrolling does not trigger zoom",
+          calls: wheelCalls.length
+        };
+
+        // 3. Keyboard verification
+        keyCalls = [];
+        const keyPlusEv = new KeyboardEvent('keydown', { key: '=', ctrlKey: true, cancelable: true });
+        window.dispatchEvent(keyPlusEv);
+        report.tests.keyboardCtrlPlus = {
+          passed: keyCalls.length === 1 && keyCalls[0].k === '=' && keyPlusEv.defaultPrevented,
+          description: "Ctrl + Plus intercepts keydown, prevents browser native zoom, and invokes zoom controller",
+          defaultPrevented: keyPlusEv.defaultPrevented,
+          capturedCall: keyCalls[0]
+        };
+
+        keyCalls = [];
+        const keyMinusEv = new KeyboardEvent('keydown', { key: '-', ctrlKey: true, cancelable: true });
+        window.dispatchEvent(keyMinusEv);
+        report.tests.keyboardCtrlMinus = {
+          passed: keyCalls.length === 1 && keyCalls[0].k === '-' && keyMinusEv.defaultPrevented,
+          description: "Ctrl + Minus intercepts keydown, prevents browser native zoom, and invokes zoom controller",
+          defaultPrevented: keyMinusEv.defaultPrevented,
+          capturedCall: keyCalls[0]
+        };
+
+        keyCalls = [];
+        const keyZeroEv = new KeyboardEvent('keydown', { key: '0', ctrlKey: true, cancelable: true });
+        window.dispatchEvent(keyZeroEv);
+        report.tests.keyboardCtrlZero = {
+          passed: keyCalls.length === 1 && keyCalls[0].k === '0' && keyZeroEv.defaultPrevented,
+          description: "Ctrl + 0 intercepts keydown, prevents browser native zoom, and resets zoom",
+          defaultPrevented: keyZeroEv.defaultPrevented,
+          capturedCall: keyCalls[0]
+        };
+
+        // 4. Performance & Memory
+        if (performance.memory) {
+          report.metrics.jsHeapUsedMB = (performance.memory.usedJSHeapSize / (1024 * 1024)).toFixed(2);
+          report.metrics.jsHeapTotalMB = (performance.memory.totalJSHeapSize / (1024 * 1024)).toFixed(2);
+        }
+        report.metrics.devicePixelRatio = window.devicePixelRatio;
+
+        try {
+          await fetch('/api/report_results', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(report)
+          });
+          console.log('[Verification] Results posted successfully!');
+        } catch (err) {
+          console.error('[Verification] Error posting results:', err);
+        }
+      };
+
+      if (document.readyState === 'complete') {
+        window.__runZoomVerification();
+      } else {
+        window.addEventListener('DOMContentLoaded', () => window.__runZoomVerification());
+        window.addEventListener('load', () => window.__runZoomVerification());
+      }
+    }
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
